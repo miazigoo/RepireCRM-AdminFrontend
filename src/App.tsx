@@ -522,6 +522,10 @@ function App() {
               <span>Оплачено до</span>
               <input className="input" name="paid_until" type="datetime-local" />
             </label>
+            <label className="field">
+              <span>Trial до</span>
+              <input className="input" name="trial_until" type="datetime-local" />
+            </label>
             <label className="field full">
               <span>Комментарий по партнеру</span>
               <input className="input" name="referral_note" />
@@ -555,6 +559,7 @@ function App() {
           referral_share_percent: Number(formNumber(form, 'referral_share_percent') ?? 50),
           referral_note: formString(form, 'referral_note') || null,
           paid_until: isoDate(form, 'paid_until'),
+          trial_until: isoDate(form, 'trial_until'),
           notes: formString(form, 'notes') || null,
         }),
       'Клиент создан',
@@ -661,6 +666,7 @@ function App() {
           subscription_status: formString(form, 'subscription_status'),
           status: formString(form, 'status'),
           paid_until: isoDate(form, 'paid_until'),
+          trial_until: isoDate(form, 'trial_until'),
           referral_partner_id: formNumber(form, 'referral_partner_id'),
           referral_share_percent: Number(formNumber(form, 'referral_share_percent') ?? 50),
           referral_note: formString(form, 'referral_note') || null,
@@ -697,7 +703,21 @@ function App() {
             </label>
             <label className="field">
               <span>Оплачено до</span>
-              <input className="input" name="paid_until" type="datetime-local" defaultValue={fieldDate(client.paid_until)} />
+              <input
+                className="input"
+                name="paid_until"
+                type="datetime-local"
+                defaultValue={fieldDate(client.paid_until)}
+              />
+            </label>
+            <label className="field">
+              <span>Trial до</span>
+              <input
+                className="input"
+                name="trial_until"
+                type="datetime-local"
+                defaultValue={fieldDate(client.trial_until)}
+              />
             </label>
             <label className="field">
               <span>Кто привел</span>
