@@ -4,11 +4,13 @@ import type {
   Client,
   Dashboard,
   FiscalSettings,
+  FiscalPreview,
   Installation,
   Invoice,
   PaymentAttempt,
   PaymentProvider,
   Plan,
+  ProductionReadiness,
   ReferralCommission,
   ReferralPayout,
   ReferralPayoutResult,
@@ -188,6 +190,10 @@ class ApiClient {
     return this.get('/payments/providers');
   }
 
+  readiness(): Promise<ProductionReadiness> {
+    return this.get('/ops/readiness');
+  }
+
   invoices(): Promise<Invoice[]> {
     return this.get('/invoices?limit=500');
   }
@@ -214,6 +220,10 @@ class ApiClient {
 
   saveFiscalSettings(body: FiscalSettings): Promise<FiscalSettings> {
     return this.put('/fiscal/settings', body as unknown as Record<string, unknown>);
+  }
+
+  fiscalPreview(body: Record<string, unknown>): Promise<FiscalPreview> {
+    return this.post('/fiscal/preview', body);
   }
 
   threads(): Promise<SupportThread[]> {

@@ -127,6 +127,17 @@
   flex-wrap: wrap;
 }
 
+.check-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 12px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: rgba(13, 20, 31, 0.68);
+  padding: 12px;
+}
+
 .topbar {
   margin-bottom: 20px;
 }
@@ -375,6 +386,27 @@ th {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
+.pre-box {
+  max-height: 420px;
+  overflow: auto;
+  margin: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #0d141f;
+  color: var(--text);
+  padding: 12px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+code {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #0d141f;
+  color: var(--text);
+  padding: 6px 8px;
+}
+
 .thread-card {
   width: 100%;
   color: var(--text);
@@ -433,5 +465,9 @@ th {
   .modal-head {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .check-row {
+    grid-template-columns: 1fr;
   }
 }

@@ -4,6 +4,7 @@ import {
   BarChart3,
   Building2,
   CheckCircle2,
+  ClipboardCheck,
   CreditCard,
   ExternalLink,
   Handshake,
@@ -28,10 +29,12 @@ import type {
   Client,
   Dashboard,
   FiscalSettings,
+  FiscalPreview,
   Installation,
   Invoice,
   PaymentProvider,
   Plan,
+  ProductionReadiness,
   ReferralCommission,
   ReferralPayout,
   ReferralPartner,
@@ -49,6 +52,7 @@ const nav: Array<{ id: ViewKey; label: string; icon: LucideIcon }> = [
   { id: 'campaigns', label: 'Акции', icon: Megaphone },
   { id: 'support', label: 'Поддержка', icon: MessageSquare },
   { id: 'plans', label: 'Тарифы', icon: Receipt },
+  { id: 'ops', label: 'Готовность', icon: ClipboardCheck },
   { id: 'admins', label: 'Админы', icon: ShieldCheck },
 ];
 
@@ -81,11 +85,57 @@ const viewMeta: Record<ViewKey, { title: string; subtitle: string }> = {
     title: 'Тарифы',
     subtitle: 'Планы подписок и лимиты',
   },
+  ops: {
+    title: 'Production readiness',
+    subtitle: 'Кассы, 54-ФЗ, webhook, pending-сверка и эксплуатационные риски',
+  },
   admins: {
     title: 'Администраторы',
     subtitle: 'Доступ к центральной панели',
   },
 };
+
+const fiscalTaxationOptions = [
+  ['osn', 'ОСН'],
+  ['usn_income', 'УСН доходы'],
+  ['usn_income_outcome', 'УСН доходы-расходы'],
+  ['esn', 'ЕСХН'],
+  ['patent', 'Патент'],
+];
+
+const fiscalVatOptions = [
+  ['none', 'Без НДС'],
+  ['vat0', 'НДС 0%'],
+  ['vat5', 'НДС 5%'],
+  ['vat7', 'НДС 7%'],
+  ['vat10', 'НДС 10%'],
+  ['vat20', 'НДС 20%'],
+  ['vat22', 'НДС 22%'],
+  ['vat105', 'НДС 5/105'],
+  ['vat107', 'НДС 7/107'],
+  ['vat110', 'НДС 10/110'],
+  ['vat120', 'НДС 20/120'],
+  ['vat122', 'НДС 22/122'],
+];
+
+const fiscalSubjectOptions = [
+  ['service', 'Услуга'],
+  ['commodity', 'Товар'],
+  ['job', 'Работа'],
+  ['payment', 'Платеж'],
+  ['agent_commission', 'Агентское вознаграждение'],
+  ['another', 'Иное'],
+];
+
+const fiscalModeOptions = [
+  ['full_payment', 'Полный расчет'],
+  ['full_prepayment', 'Полная предоплата'],
+  ['prepayment', 'Предоплата'],
+  ['advance', 'Аванс'],
+  ['partial_payment', 'Частичный расчет'],
+  ['credit', 'Передача в кредит'],
+  ['credit_payment', 'Оплата кредита'],
+];
 
 function money(value?: number | null): string {
   return new Intl.NumberFormat('ru-RU', {
@@ -187,6 +237,8 @@ function App() {
   const [providers, setProviders] = useState<PaymentProvider[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [fiscal, setFiscal] = useState<FiscalSettings | null>(null);
+  const [readiness, setReadiness] = useState<ProductionReadiness | null>(null);
+  const [fiscalPreview, setFiscalPreview] = useState<FiscalPreview | null>(null);
   const [referralPartners, setReferralPartners] = useState<ReferralPartner[]>([]);
   const [referralCommissions, setReferralCommissions] = useState<ReferralCommission[]>([]);
   const [referralPayouts, setReferralPayouts] = useState<ReferralPayout[]>([]);
@@ -268,6 +320,19 @@ function App() {
     }
   }, [selectedThread]);
 
+  const loadOps = useCallback(async () => {
+    const [readinessRow, fiscalRow, providerRows, clientRows] = await Promise.all([
+      api.readiness(),
+      api.fiscalSettings(),
+      api.providers(),
+      api.clients(),
+    ]);
+    setReadiness(readinessRow);
+    setFiscal(fiscalRow);
+    setProviders(providerRows);
+    setClients(clientRows);
+  }, []);
+
   const loadView = useCallback(async () => {
     if (!me) return;
     setLoading(true);
@@ -283,13 +348,14 @@ function App() {
       }
       if (view === 'support') await loadSupport();
       if (view === 'plans') setPlans(await api.plans());
+      if (view === 'ops') await loadOps();
       if (view === 'admins') setAdmins(await api.admins());
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Ошибка загрузки');
     } finally {
       setLoading(false);
     }
-  }, [loadClients, loadPayments, loadPlans, loadReferrals, loadSupport, me, view]);
+  }, [loadClients, loadOps, loadPayments, loadPlans, loadReferrals, loadSupport, me, view]);
 
   useEffect(() => {
     if (!api.token) return;
@@ -409,6 +475,7 @@ function App() {
         {view === 'campaigns' && renderCampaigns()}
         {view === 'support' && renderSupport()}
         {view === 'plans' && renderPlans()}
+        {view === 'ops' && renderOps()}
         {view === 'admins' && renderAdmins()}
       </main>
 
@@ -860,9 +927,17 @@ function App() {
             </div>
             <div className="stack">
               {providers.map((provider) => (
-                <div className="row-actions" key={provider.code}>
-                  <strong>{provider.name}</strong>
-                  <Badge value={provider.configured ? 'active' : 'expired'} />
+                <div className="check-row" key={provider.code}>
+                  <div>
+                    <strong>{provider.name}</strong>
+                    {provider.default && <span className="muted"> · по умолчанию</span>}
+                    {provider.issues?.map((issue) => (
+                      <div className="muted" key={issue}>
+                        {issue}
+                      </div>
+                    ))}
+                  </div>
+                  <Badge value={provider.production_ready ? 'active' : provider.configured ? 'warning' : 'expired'} />
                 </div>
               ))}
             </div>
@@ -881,15 +956,55 @@ function App() {
               </label>
               <label className="field">
                 <span>СНО</span>
-                <input className="input" name="taxation" defaultValue={fiscalRow.taxation} />
+                <select className="select" name="taxation" defaultValue={fiscalRow.taxation}>
+                  {fiscalTaxationOptions.map(([value, label]) => (
+                    <option value={value} key={value}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
               </label>
               <label className="field">
                 <span>НДС</span>
-                <input className="input" name="vat" defaultValue={fiscalRow.vat} />
+                <select className="select" name="vat" defaultValue={fiscalRow.vat}>
+                  {fiscalVatOptions.map(([value, label]) => (
+                    <option value={value} key={value}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="field">
+                <span>Предмет</span>
+                <select className="select" name="payment_subject" defaultValue={fiscalRow.payment_subject}>
+                  {fiscalSubjectOptions.map(([value, label]) => (
+                    <option value={value} key={value}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="field">
+                <span>Способ</span>
+                <select className="select" name="payment_mode" defaultValue={fiscalRow.payment_mode}>
+                  {fiscalModeOptions.map(([value, label]) => (
+                    <option value={value} key={value}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
               </label>
               <label className="field">
                 <span>Название в чеке</span>
                 <input className="input" name="item_name" defaultValue={fiscalRow.item_name} />
+              </label>
+              <label className="field">
+                <span>ФФД</span>
+                <select className="select" name="ffd_version" defaultValue={fiscalRow.ffd_version}>
+                  <option value="1.05">1.05</option>
+                  <option value="1.1">1.1</option>
+                  <option value="1.2">1.2</option>
+                </select>
               </label>
               <label className="field">
                 <span>Email</span>
@@ -993,10 +1108,10 @@ function App() {
           enabled: formString(form, 'enabled') === 'true',
           taxation: formString(form, 'taxation') || 'usn_income',
           vat: formString(form, 'vat') || 'none',
-          payment_subject: 'service',
-          payment_mode: 'full_payment',
+          payment_subject: formString(form, 'payment_subject') || 'service',
+          payment_mode: formString(form, 'payment_mode') || 'full_payment',
           item_name: formString(form, 'item_name') || 'Подписка RepireCRM',
-          ffd_version: '1.2',
+          ffd_version: formString(form, 'ffd_version') || '1.2',
           merchant_email: formString(form, 'merchant_email') || null,
           merchant_phone: formString(form, 'merchant_phone') || null,
           payload: {},
@@ -1004,6 +1119,148 @@ function App() {
       'Фискализация сохранена',
     );
     await loadPayments();
+  }
+
+  function renderOps() {
+    if (!readiness) return null;
+    const failed = readiness.checks.filter((check) => !check.ok && check.severity !== 'warning').length;
+    const warnings = readiness.checks.filter((check) => !check.ok && check.severity === 'warning').length;
+    const readyProviders = readiness.providers.filter((provider) => provider.production_ready).length;
+
+    return (
+      <div className="grid">
+        <section className="grid metrics">
+          <MetricCard icon={ClipboardCheck} label="Production" value={readiness.ok ? 'Готов' : 'Не готов'} hint={readiness.environment} />
+          <MetricCard icon={CreditCard} label="Боевые кассы" value={readyProviders} hint={`из ${readiness.providers.length}`} />
+          <MetricCard icon={Receipt} label="Ошибки" value={failed} hint="нужно исправить" />
+          <MetricCard icon={RefreshCw} label="Предупреждения" value={warnings} hint="операционные риски" />
+        </section>
+
+        <section className="grid two-col">
+          <div className="panel">
+            <div className="panel-title">
+              <h2>Чеклист запуска</h2>
+              <Badge value={readiness.ok ? 'active' : 'failed'} />
+            </div>
+            <div className="stack">
+              {readiness.checks.map((check) => (
+                <div className="check-row" key={check.code}>
+                  <div>
+                    <strong>{check.title}</strong>
+                    <div className="muted">{check.message}</div>
+                  </div>
+                  <Badge value={check.ok ? 'ok' : check.severity === 'warning' ? 'warning' : 'failed'} />
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="panel">
+            <div className="panel-title">
+              <h2>Платежные провайдеры</h2>
+              <span className="muted">default: {readiness.default_provider}</span>
+            </div>
+            <div className="stack">
+              {readiness.providers.map((provider) => (
+                <div className="check-row" key={provider.code}>
+                  <div>
+                    <strong>{provider.name}</strong>
+                    {provider.default && <span className="muted"> · по умолчанию</span>}
+                    {!provider.issues.length && <div className="muted">Конфигурация выглядит рабочей</div>}
+                    {provider.issues.map((issue) => (
+                      <div className="muted" key={issue}>
+                        {issue}
+                      </div>
+                    ))}
+                  </div>
+                  <Badge value={provider.production_ready ? 'active' : provider.configured ? 'warning' : 'expired'} />
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <section className="grid two-col">
+          <form className="panel stack" onSubmit={previewFiscal}>
+            <div className="panel-title">
+              <h2>Preview 54-ФЗ payload</h2>
+            </div>
+            <div className="form-grid">
+              <label className="field">
+                <span>Провайдер</span>
+                <ProviderSelect />
+              </label>
+              <label className="field">
+                <span>Клиент</span>
+                <select className="select" name="client_id">
+                  <option value="">Глобальные настройки</option>
+                  {clients.map((client) => (
+                    <option value={client.id} key={client.id}>
+                      {client.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="field">
+                <span>Сумма, коп.</span>
+                <input className="input" name="amount" type="number" defaultValue={990000} required />
+              </label>
+              <label className="field">
+                <span>Описание</span>
+                <input className="input" name="description" defaultValue="Подписка RepireCRM" required />
+              </label>
+            </div>
+            <button className="btn primary" type="submit">
+              Проверить payload
+            </button>
+          </form>
+
+          <div className="panel stack">
+            <div className="panel-title">
+              <h2>Результат проверки</h2>
+              {fiscalPreview && <Badge value={fiscalPreview.ok ? 'ok' : 'failed'} />}
+            </div>
+            {!fiscalPreview && <div className="muted">Выберите провайдера и проверьте чек до боевого платежа.</div>}
+            {fiscalPreview?.error && <div className="alert">{fiscalPreview.error}</div>}
+            {fiscalPreview?.ok && <pre className="pre-box">{JSON.stringify(fiscalPreview.payload, null, 2)}</pre>}
+          </div>
+        </section>
+
+        <section className="panel stack">
+          <div className="panel-title">
+            <h2>Эксплуатация</h2>
+          </div>
+          <div className="check-row">
+            <div>
+              <strong>Admin backup</strong>
+              <div className="muted">systemd timer ежедневно делает PostgreSQL dump и хранит 14 дней.</div>
+            </div>
+            <code>repaircrm-admin-backup.timer</code>
+          </div>
+          <div className="check-row">
+            <div>
+              <strong>Deploy</strong>
+              <div className="muted">safe rsync сохраняет `.env.production`, backups и runtime-данные.</div>
+            </div>
+            <code>deploy/deploy-production.sh</code>
+          </div>
+        </section>
+      </div>
+    );
+  }
+
+  async function previewFiscal(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const result = await run(() =>
+      api.fiscalPreview({
+        provider: formString(form, 'provider') || readiness?.default_provider || 'mock',
+        client_id: formNumber(form, 'client_id'),
+        amount: Number(formNumber(form, 'amount') ?? 990000),
+        description: formString(form, 'description') || 'Подписка RepireCRM',
+      }),
+    );
+    if (result) setFiscalPreview(result);
   }
 
   function renderReferrals() {

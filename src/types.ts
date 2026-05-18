@@ -6,6 +6,7 @@ export type ViewKey =
   | 'campaigns'
   | 'support'
   | 'plans'
+  | 'ops'
   | 'admins';
 
 export interface AdminUser {
@@ -113,6 +114,32 @@ export interface PaymentProvider {
   name: string;
   configured: boolean;
   default: boolean;
+  production_ready: boolean;
+  issues: string[];
+}
+
+export interface ReadinessCheck {
+  code: string;
+  title: string;
+  ok: boolean;
+  severity: 'error' | 'warning';
+  message: string;
+}
+
+export interface ProductionReadiness {
+  ok: boolean;
+  environment: string;
+  public_base_url: string;
+  default_provider: string;
+  providers: PaymentProvider[];
+  checks: ReadinessCheck[];
+}
+
+export interface FiscalPreview {
+  provider: string;
+  ok: boolean;
+  payload: Record<string, unknown>;
+  error?: string | null;
 }
 
 export interface FiscalReceipt {
